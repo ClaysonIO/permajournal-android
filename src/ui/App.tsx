@@ -8,9 +8,10 @@ import { RepoPicker } from './RepoPicker';
 import { JournalScreen } from './Journal';
 import { HistoryScreen } from './History';
 import { SettingsScreen } from './Settings';
+import { YearsScreen } from './Years';
 import { useWorkspace } from './workspace';
 
-type Screen = 'journal' | 'history' | 'settings';
+type Screen = 'journal' | 'history' | 'years' | 'settings';
 
 /** Back after this long in the background and we reopen on today. */
 const RESET_TO_TODAY_AFTER_MS = 30 * 60_000;
@@ -93,6 +94,8 @@ function Main(props: { session: Session; repo: SelectedRepo; onSwitchRepo: () =>
   switch (screen) {
     case 'history':
       return <HistoryScreen ws={ws} onOpen={openDate} onBack={() => setScreen('journal')} />;
+    case 'years':
+      return <YearsScreen ws={ws} onOpen={openDate} onBack={() => setScreen('journal')} />;
     case 'settings':
       return (
         <SettingsScreen
@@ -110,6 +113,7 @@ function Main(props: { session: Session; repo: SelectedRepo; onSwitchRepo: () =>
           date={date}
           onDate={setDate}
           onHistory={() => setScreen('history')}
+          onYears={() => setScreen('years')}
           onSettings={() => setScreen('settings')}
         />
       );

@@ -41,6 +41,7 @@ export function RepoPicker(props: { session: Session; onPick: (r: SelectedRepo) 
   return (
     <div className="app">
       <header className="topbar safe-top">
+        <img className="logo-small" src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />
         <h2>Choose your journal</h2>
         <button className="link" onClick={props.onSignOut}>
           Sign out

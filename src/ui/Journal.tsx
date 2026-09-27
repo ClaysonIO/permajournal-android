@@ -4,7 +4,7 @@ import { countWords } from '../lib/db';
 import { mergeText } from '../lib/merge';
 import { MonthBar } from './MonthBar';
 import { SyncBadge } from './SyncBadge';
-import { ChevronLeft, ChevronRight, GearIcon, HistoryIcon } from './icons';
+import { ChevronLeft, ChevronRight, GearIcon, GridIcon, HistoryIcon } from './icons';
 import { useWrittenDates, type Workspace } from './workspace';
 
 const SAVE_DEBOUNCE_MS = 300;
@@ -14,6 +14,7 @@ export function JournalScreen(props: {
   date: string;
   onDate: (d: string) => void;
   onHistory: () => void;
+  onYears: () => void;
   onSettings: () => void;
 }) {
   const { db } = props.ws;
@@ -55,6 +56,9 @@ export function JournalScreen(props: {
       <footer className="toolbar safe-bottom">
         <SyncBadge sync={props.ws.sync} onClick={props.onSettings} />
         <div className="spacer" />
+        <button className="icon-btn" aria-label="Years" onClick={props.onYears}>
+          <GridIcon />
+        </button>
         <button className="icon-btn" aria-label="History" onClick={props.onHistory}>
           <HistoryIcon />
         </button>

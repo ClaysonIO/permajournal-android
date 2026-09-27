@@ -21,6 +21,9 @@ Built with Capacitor 8, React and IndexedDB. No backend server is required.
   comes back, and every minute while the app is open. Failures retry with
   backoff.
 - **Resolves conflicts automatically.** See [Sync](#sync).
+- **Years.** One page with a GitHub-style grid for every year since your
+  first entry, shaded by how much you wrote. Tap a day to preview it, then tap
+  again (or press Open) to go to it.
 - **History.** The History page lists every entry in the database, newest
   first and grouped by month, with totals, your streak, and full-text search.
 
@@ -66,6 +69,13 @@ Sync does not use a git client. It talks to the GitHub API directly:
 Clearing a day's text deletes its file on the next sync. Git history keeps
 the old version.
 
+## Logo
+
+The logo is a grid of days whose filled cells spell a "P". It's defined in
+`resources/logo.mjs`. After changing it, run `node resources/render-icons.mjs`
+(this needs Playwright) to regenerate the Android launcher icons, the splash
+screens and `public/logo.svg`.
+
 ## Develop
 
 ```sh
@@ -87,5 +97,5 @@ src/lib/sync.ts     Pull → merge → push loop, retries and status
 src/lib/github.ts   GraphQL reads, Git Data API commits, repository discovery
 src/lib/merge.ts    Three-way text merge that never loses text
 src/lib/auth.ts     Device-flow sign-in, stored session and repository
-src/ui/             Journal (month bar + editor), History, Settings, sign-in, repo picker
+src/ui/             Journal (month bar + editor), Years, History, Settings, sign-in, repo picker
 ```

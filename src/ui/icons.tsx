@@ -38,3 +38,16 @@ export const SearchIcon = () => (
     <path d="m20 20-3.5-3.5" />
   </svg>
 );
+export const GridIcon = () => (
+  <svg {...base}>
+    <rect x="3.5" y="3.5" width="4" height="4" rx="1" />
+    <rect x="10" y="3.5" width="4" height="4" rx="1" />
+    <rect x="16.5" y="3.5" width="4" height="4" rx="1" />
+    <rect x="3.5" y="10" width="4" height="4" rx="1" />
+    <rect x="10" y="10" width="4" height="4" rx="1" />
+    <rect x="16.5" y="10" width="4" height="4" rx="1" />
+    <rect x="3.5" y="16.5" width="4" height="4" rx="1" />
+    <rect x="10" y="16.5" width="4" height="4" rx="1" />
+    <rect x="16.5" y="16.5" width="4" height="4" rx="1" />
+  </svg>
+);

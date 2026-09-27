@@ -54,6 +54,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (s: Session) => void }) {
   return (
     <div className="app center">
       <div className="card signin">
+        <img className="logo" src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />
         <h1 className="brand">Permajournal</h1>
         <p className="muted">A daily journal that lives on your phone and is backed up to your own GitHub repository.</p>
 
