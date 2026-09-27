@@ -9,9 +9,11 @@ import { JournalScreen } from './Journal';
 import { HistoryScreen } from './History';
 import { SettingsScreen } from './Settings';
 import { YearsScreen } from './Years';
+import { PhotosScreen } from './Photos';
+import { handleBack } from './back';
 import { useWorkspace } from './workspace';
 
-type Screen = 'journal' | 'history' | 'years' | 'settings';
+type Screen = 'journal' | 'history' | 'years' | 'settings' | 'photos';
 
 /** Back after this long in the background and we reopen on today. */
 const RESET_TO_TODAY_AFTER_MS = 30 * 60_000;
@@ -78,6 +80,7 @@ function Main(props: { session: Session; repo: SelectedRepo; onSwitchRepo: () =>
   screenRef.current = screen;
   useEffect(() => {
     const sub = CapApp.addListener('backButton', () => {
+      if (handleBack()) return;
       if (screenRef.current !== 'journal') setScreen('journal');
       else void CapApp.minimizeApp();
     });
@@ -94,6 +97,8 @@ function Main(props: { session: Session; repo: SelectedRepo; onSwitchRepo: () =>
   switch (screen) {
     case 'history':
       return <HistoryScreen ws={ws} onOpen={openDate} onBack={() => setScreen('journal')} />;
+    case 'photos':
+      return <PhotosScreen ws={ws} date={date} onBack={() => setScreen('journal')} />;
     case 'years':
       return <YearsScreen ws={ws} onOpen={openDate} onBack={() => setScreen('journal')} />;
     case 'settings':
@@ -114,6 +119,7 @@ function Main(props: { session: Session; repo: SelectedRepo; onSwitchRepo: () =>
           onDate={setDate}
           onHistory={() => setScreen('history')}
           onYears={() => setScreen('years')}
+          onPhotos={() => setScreen('photos')}
           onSettings={() => setScreen('settings')}
         />
       );

@@ -1,5 +1,7 @@
 import { gitBlobSha } from '../src/lib/gitsha';
+import type { RemotePhoto } from '../src/lib/db';
 import type { FileChange, JournalRemote, RemoteFile, RemoteHead } from '../src/lib/github';
+import { parsePointer, type LfsPointer, type LfsPort } from '../src/lib/lfs';
 
 /** In-memory stand-in for a GitHub branch: a linear list of snapshots. */
 export class FakeRemote implements JournalRemote {
@@ -25,6 +27,25 @@ export class FakeRemote implements JournalRemote {
       if (path.startsWith(folder + '/')) out.push({ name: path.slice(folder.length + 1), sha: await gitBlobSha(text) });
     }
     return out;
+  }
+
+  async listPhotos(commit: string, folder: string): Promise<RemotePhoto[]> {
+    const c = this.commits.find((x) => x.id === commit)!;
+    const out: RemotePhoto[] = [];
+    for (const [path, text] of c.files) {
+      const m = new RegExp(`^${folder}/assets/(\\d{4}-\\d{2}-\\d{2})/[^/]+\\.jpg$`).exec(path);
+      const pointer = parsePointer(text);
+      if (m && pointer) out.push({ path, date: m[1], ...pointer });
+    }
+    return out;
+  }
+
+  async readText(commit: string, path: string): Promise<string | null> {
+    return this.commits.find((x) => x.id === commit)!.files.get(path) ?? null;
+  }
+
+  async getBinary(): Promise<Uint8Array> {
+    throw new Error('not used');
   }
 
   async getBlobs(shas: string[]): Promise<Map<string, string>> {
@@ -56,5 +77,25 @@ export class FakeRemote implements JournalRemote {
       }
     }
     this.commits.push({ id: `c${this.commits.length}`, files });
+  }
+}
+
+/** In-memory LFS storage. */
+export class FakeLfs implements LfsPort {
+  objects = new Map<string, Uint8Array>();
+  uploads = 0;
+
+  async upload(objects: (LfsPointer & { bytes: () => Promise<Uint8Array> })[]) {
+    for (const o of objects) {
+      if (this.objects.has(o.oid)) continue;
+      this.uploads++;
+      this.objects.set(o.oid, await o.bytes());
+    }
+  }
+
+  async download(p: LfsPointer) {
+    const b = this.objects.get(p.oid);
+    if (!b) throw new Error('missing object');
+    return b;
   }
 }

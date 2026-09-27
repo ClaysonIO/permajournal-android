@@ -1,3 +1,7 @@
+import type { RemotePhoto } from './db';
+import { fromBase64 } from './http';
+import { parsePointer } from './lfs';
+
 /**
  * The slice of GitHub the sync engine needs. Reads go through GraphQL (one
  * request lists a whole folder or fetches ~100 files); writes use the Git Data
@@ -23,6 +27,12 @@ export interface JournalRemote {
   getHead(): Promise<RemoteHead | null>;
   listFolder(commit: string, folder: string): Promise<RemoteFile[]>;
   getBlobs(shas: string[]): Promise<Map<string, string>>;
+  /** Photos under `<folder>/assets/<YYYY-MM-DD>/`. */
+  listPhotos(commit: string, folder: string): Promise<RemotePhoto[]>;
+  /** Text of a file at a commit, or null if it doesn't exist. */
+  readText(commit: string, path: string): Promise<string | null>;
+  /** Raw bytes of a git blob (for images committed without LFS). */
+  getBinary(sha: string): Promise<Uint8Array>;
   /** Returns 'conflict' when the branch moved since `parent` (someone else pushed). */
   commit(parent: RemoteHead, files: FileChange[], message: string): Promise<RemoteHead | 'conflict'>;
 }
@@ -40,6 +50,8 @@ export class GitHubError extends Error {
 }
 
 const API = 'https://api.github.com';
+const IMAGE_FILE = /\.(jpe?g|png|gif|webp|avif|heic|heif)$/i;
+const DATE_DIR = /^\d{4}-\d{2}-\d{2}$/;
 
 export class GitHubClient {
   constructor(private token: string) {}
@@ -254,9 +266,44 @@ export class GitHubRemote implements JournalRemote {
   }
 
   private async restBlob(sha: string): Promise<string> {
+    return new TextDecoder().decode(await this.getBinary(sha));
+  }
+
+  async getBinary(sha: string): Promise<Uint8Array> {
     const blob = await this.client.rest<{ content: string }>('GET', `/repos/${this.owner}/${this.name}/git/blobs/${sha}`);
-    const bin = atob(blob.content.replace(/\n/g, ''));
-    return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+    return fromBase64(blob.content);
+  }
+
+  async readText(commit: string, path: string): Promise<string | null> {
+    const data = await this.client.graphql<{ repository: { object: { text: string | null } | null } }>(
+      `query($owner:String!,$name:String!,$expr:String!){repository(owner:$owner,name:$name){
+        object(expression:$expr){ ... on Blob { text } } } }`,
+      { owner: this.owner, name: this.name, expr: `${commit}:${path}` },
+    );
+    return data.repository.object?.text ?? null;
+  }
+
+  async listPhotos(commit: string, folder: string): Promise<RemotePhoto[]> {
+    type Blob = { text: string | null; isBinary: boolean; byteSize: number };
+    type Entry = { name: string; oid: string; type: string; object: { entries?: Entry[] } & Partial<Blob> };
+    const data = await this.client.graphql<{ repository: { object: { entries?: Entry[] } | null } }>(
+      `query($owner:String!,$name:String!,$expr:String!){repository(owner:$owner,name:$name){
+        object(expression:$expr){ ... on Tree { entries { name type oid object { ... on Tree {
+          entries { name type oid object { ... on Blob { text isBinary byteSize } } } } } } } } } }`,
+      { owner: this.owner, name: this.name, expr: `${commit}:${folder}/assets` },
+    );
+    const out: RemotePhoto[] = [];
+    for (const day of data.repository.object?.entries ?? []) {
+      if (day.type !== 'tree' || !DATE_DIR.test(day.name)) continue;
+      for (const f of day.object.entries ?? []) {
+        if (f.type !== 'blob' || !IMAGE_FILE.test(f.name)) continue;
+        const path = `${folder}/assets/${day.name}/${f.name}`;
+        const pointer = parsePointer(f.object.text);
+        if (pointer) out.push({ path, date: day.name, ...pointer });
+        else if (f.object.isBinary) out.push({ path, date: day.name, oid: `git:${f.oid}`, size: f.object.byteSize ?? 0 });
+      }
+    }
+    return out;
   }
 
   async commit(parent: RemoteHead, files: FileChange[], message: string): Promise<RemoteHead | 'conflict'> {

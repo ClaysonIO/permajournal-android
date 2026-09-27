@@ -3,6 +3,9 @@ import { App as CapApp } from '@capacitor/app';
 import { Network } from '@capacitor/network';
 import { JournalDb } from '../lib/db';
 import { GitHubClient, GitHubRemote } from '../lib/github';
+import { http } from '../lib/http';
+import { LfsClient } from '../lib/lfs';
+import { PhotoService } from '../lib/photos';
 import { SyncEngine, type SyncState } from '../lib/sync';
 import type { SelectedRepo, Session } from '../lib/auth';
 
@@ -10,6 +13,7 @@ export interface Workspace {
   db: JournalDb;
   sync: SyncEngine;
   client: GitHubClient;
+  photos: PhotoService;
   repo: SelectedRepo;
 }
 
@@ -28,22 +32,24 @@ export function useWorkspace(session: Session, repo: SelectedRepo): Workspace | 
     (async () => {
       const db = await JournalDb.open(repo.fullName);
       const client = new GitHubClient(session.token);
-      const sync = new SyncEngine(db, new GitHubRemote(client, repo.fullName, repo.branch), repo.folder);
+      const remote = new GitHubRemote(client, repo.fullName, repo.branch);
+      const lfs = new LfsClient(http, repo.fullName, session.login, session.token);
+      const sync = new SyncEngine(db, remote, repo.folder, lfs);
+      const photos = new PhotoService(db, repo.folder, lfs, remote);
       await sync.init();
       if (disposed) {
         db.close();
         return;
       }
-      workspace = { db, sync, client, repo };
+      workspace = { db, sync, client, photos, repo };
       setWs(workspace);
 
-      cleanups.push(
-        db.onChange((e) => {
-          if (e.source !== 'local') return;
-          void sync.notePendingChange();
-          sync.request(PUSH_DEBOUNCE_MS);
-        }),
-      );
+      const onLocal = (e: { source: string }) => {
+        if (e.source !== 'local') return;
+        void sync.notePendingChange();
+        sync.request(PUSH_DEBOUNCE_MS);
+      };
+      cleanups.push(db.onChange(onLocal), db.onPhotoChange(onLocal));
 
       const status = await Network.getStatus().catch(() => ({ connected: navigator.onLine }));
       sync.setOnline(status.connected);
@@ -65,10 +71,11 @@ export function useWorkspace(session: Session, repo: SelectedRepo): Workspace | 
       disposed = true;
       cleanups.forEach((c) => c());
       workspace?.sync.stop();
+      workspace?.photos.dispose();
       workspace?.db.close();
       setWs(null);
     };
-  }, [session.token, repo.fullName, repo.branch, repo.folder]);
+  }, [session.token, session.login, repo.fullName, repo.branch, repo.folder]);
 
   return ws;
 }

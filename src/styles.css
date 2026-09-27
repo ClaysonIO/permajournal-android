@@ -300,10 +300,6 @@ input:focus {
   color: var(--muted);
   font-style: italic;
 }
-.wordcount {
-  text-align: right;
-  padding: 2px 0 4px;
-}
 .toolbar {
   display: flex;
   align-items: center;
@@ -559,4 +555,133 @@ input:focus {
   width: 28px;
   height: 28px;
   margin-left: 8px;
+}
+
+/* Photos */
+.photo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 14px;
+  padding: 3px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.editor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0 6px;
+}
+.small-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.small-btn.disabled {
+  opacity: 0.5;
+}
+.empty {
+  text-align: center;
+  padding-top: 40px;
+}
+.masonry {
+  column-count: 2;
+  column-gap: 6px;
+  padding: 6px;
+}
+@media (min-width: 700px) {
+  .masonry {
+    column-count: 3;
+  }
+}
+.tile {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--seg-empty);
+  break-inside: avoid;
+  position: relative;
+  cursor: pointer;
+}
+.tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tile-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+.viewer {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 10;
+  color: #fff;
+}
+.viewer-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+}
+.viewer-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.viewer-status {
+  position: absolute;
+  bottom: calc(24px + var(--safe-bottom));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.7;
+}
+.viewer-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 4px;
+  padding-right: 4px;
+  background: linear-gradient(rgba(0, 0, 0, 0.5), transparent);
+  font-size: 14px;
+}
+.viewer-bar.top {
+  top: 0;
+}
+.icon-btn.light {
+  color: #fff;
+}
+.icon-btn.light:active {
+  background: rgba(255, 255, 255, 0.15);
 }

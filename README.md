@@ -24,6 +24,10 @@ Built with Capacitor 8, React and IndexedDB. No backend server is required.
 - **Years.** One page with a GitHub-style grid for every year since your
   first entry (newest at the top), shaded by how much you wrote. Tap a day to preview it, then tap
   again (or press Open) to go to it.
+- **Photos.** The photo button under each day's text opens that day's photos
+  in a masonry grid. Tap one to see it full-screen: pinch or double-tap to
+  zoom, drag to pan, swipe to move between photos. Photos are added from the
+  device's picker.
 - **History.** The History page lists every entry in the database, newest
   first and grouped by month, with totals, your streak, and full-text search.
 
@@ -66,7 +70,36 @@ Sync does not use a git client. It talks to the GitHub API directly:
    pushed in the meantime, the ref update is rejected and the app pulls,
    merges and tries again.
 
-Clearing a day's text deletes its file on the next sync. Git history keeps
+Clearing a day's text deletes its file on the next sync.
+
+## Photos and Git LFS
+
+Photos use the same layout as the web app,
+`entries/assets/YYYY-MM-DD/<first 8 of sha256>.jpg`, stored with
+**Git LFS**:
+
+- **Adding a photo.** The image is rotated according to its EXIF
+  orientation, scaled so its longest edge is at most 2560 px, and re-encoded
+  as JPEG. It's then saved to IndexedDB, so it shows up straight away and
+  works offline.
+- **Syncing.** The bytes go to LFS through the
+  [batch API](https://github.com/git-lfs/git-lfs/blob/main/docs/api/batch.md)
+  (batch, then PUT, then verify). The ~130-byte pointer file goes into the
+  same commit as that sync's text changes. If `.gitattributes` has no
+  `*.jpg filter=lfs` rule, it's added in that commit too.
+- **Viewing.** Photos added on another device appear as soon as their
+  pointers sync. The image itself is downloaded from LFS the first time you
+  open it, then cached on the device.
+- **Why native HTTP.** `github.com/<repo>.git/info/lfs/...` and the LFS
+  storage host don't send CORS headers, so a WebView can't call them.
+  `src/lib/http.ts` sends those requests through Capacitor's native HTTP
+  instead. No server is needed.
+
+On GitHub, LFS is on by default for every repository. The `repo` OAuth scope,
+or a fine-grained token with *Contents: read and write*, covers LFS too. LFS
+storage and bandwidth count against the account's Git LFS quota. Deleting a
+photo removes the pointer, but the LFS object stays in storage until it's
+purged on GitHub. Git history keeps
 the old version.
 
 ## Logo
@@ -80,7 +113,7 @@ screens and `public/logo.svg`.
 
 ```sh
 npm install
-npm test            # merge + sync engine tests (in-memory GitHub, fake IndexedDB)
+npm test            # merge, sync, photo/LFS tests (in-memory GitHub + LFS, fake IndexedDB)
 npm run dev         # browser preview; device-flow calls go through the Vite proxy
 npm run android:sync
 npm run android:open  # build/run from Android Studio
@@ -97,5 +130,8 @@ src/lib/sync.ts     Pull → merge → push loop, retries and status
 src/lib/github.ts   GraphQL reads, Git Data API commits, repository discovery
 src/lib/merge.ts    Three-way text merge that never loses text
 src/lib/auth.ts     Device-flow sign-in, stored session and repository
-src/ui/             Journal (month bar + editor), Years, History, Settings, sign-in, repo picker
+src/lib/lfs.ts      Git LFS batch API client, pointer files, .gitattributes rule
+src/lib/photos.ts   Adding photos, on-demand LFS download and caching
+src/lib/http.ts     Native (CORS-free) HTTP for github.com and LFS storage
+src/ui/             Journal (month bar + editor), Photos (masonry + zoom viewer), Years, History, Settings, sign-in, repo picker
 ```

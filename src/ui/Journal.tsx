@@ -4,7 +4,8 @@ import { countWords } from '../lib/db';
 import { mergeText } from '../lib/merge';
 import { MonthBar } from './MonthBar';
 import { SyncBadge } from './SyncBadge';
-import { ChevronLeft, ChevronRight, GearIcon, GridIcon, HistoryIcon } from './icons';
+import { ChevronLeft, ChevronRight, GearIcon, GridIcon, HistoryIcon, PhotoIcon } from './icons';
+import { useDayPhotos } from './Photos';
 import { useWrittenDates, type Workspace } from './workspace';
 
 const SAVE_DEBOUNCE_MS = 300;
@@ -16,6 +17,7 @@ export function JournalScreen(props: {
   onHistory: () => void;
   onYears: () => void;
   onSettings: () => void;
+  onPhotos: () => void;
 }) {
   const { db } = props.ws;
   const written = useWrittenDates(db);
@@ -52,7 +54,7 @@ export function JournalScreen(props: {
           <ChevronRight />
         </button>
       </header>
-      <Editor key={props.date} ws={props.ws} date={props.date} isToday={props.date === today} />
+      <Editor key={props.date} ws={props.ws} date={props.date} isToday={props.date === today} onPhotos={props.onPhotos} />
       <footer className="toolbar safe-bottom">
         <SyncBadge sync={props.ws.sync} onClick={props.onSettings} />
         <div className="spacer" />
@@ -75,7 +77,7 @@ export function JournalScreen(props: {
  * debounce; if a sync brings in remote edits for this day while we're typing,
  * they're merged into what's on screen instead of overwriting it.
  */
-function Editor({ ws, date, isToday }: { ws: Workspace; date: string; isToday: boolean }) {
+function Editor({ ws, date, isToday, onPhotos }: { ws: Workspace; date: string; isToday: boolean; onPhotos: () => void }) {
   const { db } = ws;
   const [text, setText] = useState<string | null>(null);
   const saved = useRef('');
@@ -83,6 +85,7 @@ function Editor({ ws, date, isToday }: { ws: Workspace; date: string; isToday: b
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const selection = useRef<[number, number] | null>(null);
+  const photos = useDayPhotos(ws, date);
 
   const flush = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -151,7 +154,13 @@ function Editor({ ws, date, isToday }: { ws: Workspace; date: string; isToday: b
         }}
         onBlur={flush}
       />
-      <div className="wordcount muted small">{countWords(text)} words</div>
+      <div className="editor-foot">
+        <button className="photo-btn" onClick={onPhotos} aria-label="Photos">
+          <PhotoIcon />
+          {photos?.length ? `${photos.length}` : 'Add'}
+        </button>
+        <span className="muted small">{countWords(text)} words</span>
+      </div>
     </div>
   );
 }

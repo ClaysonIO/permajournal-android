@@ -43,6 +43,35 @@ interface Schema extends DBSchema {
   /** Keys of dirty entries, so finding work to push never scans full texts. */
   pending: { key: string; value: true };
   meta: { key: string; value: unknown };
+  photos: { key: string; value: PhotoRecord; indexes: { 'by-date': string; 'by-state': PhotoState } };
+}
+
+/**
+ * A photo attached to a day, stored in the repo at
+ * `<folder>/assets/<date>/<oid prefix>.jpg` as a Git LFS pointer.
+ * `local` = not uploaded yet, `deleted` = removal not pushed yet.
+ */
+export type PhotoState = 'local' | 'synced' | 'deleted';
+export interface PhotoRecord {
+  path: string;
+  date: string;
+  /** LFS sha256, or `git:<blob sha>` for an image committed without LFS. */
+  oid: string;
+  size: number;
+  state: PhotoState;
+  /** Full image; null until downloaded. */
+  blob: Blob | null;
+  thumb: Blob | null;
+  width: number | null;
+  height: number | null;
+  addedAt: number;
+}
+
+export interface RemotePhoto {
+  path: string;
+  date: string;
+  oid: string;
+  size: number;
 }
 
 const WRITE_STORES = ['entries', 'summaries', 'pending'] as const;
@@ -71,16 +100,24 @@ function summarize(e: EntryRecord): EntrySummary {
 
 export class JournalDb {
   private listeners = new Set<(e: ChangeEvent) => void>();
+  private photoListeners = new Set<(e: ChangeEvent) => void>();
 
   private constructor(private db: IDBPDatabase<Schema>) {}
 
   static async open(name: string): Promise<JournalDb> {
-    const db = await openDB<Schema>(`permajournal:${name}`, 1, {
-      upgrade(db) {
-        db.createObjectStore('entries', { keyPath: 'date' });
-        db.createObjectStore('summaries', { keyPath: 'date' });
-        db.createObjectStore('pending');
-        db.createObjectStore('meta');
+    const db = await openDB<Schema>(`permajournal:${name}`, 2, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          db.createObjectStore('entries', { keyPath: 'date' });
+          db.createObjectStore('summaries', { keyPath: 'date' });
+          db.createObjectStore('pending');
+          db.createObjectStore('meta');
+        }
+        if (oldVersion < 2) {
+          const photos = db.createObjectStore('photos', { keyPath: 'path' });
+          photos.createIndex('by-date', 'date');
+          photos.createIndex('by-state', 'state');
+        }
       },
     });
     return new JournalDb(db);
@@ -138,7 +175,120 @@ export class JournalDb {
   }
 
   async pendingCount(): Promise<number> {
-    return this.db.count('pending');
+    const [entries, local, deleted] = await Promise.all([
+      this.db.count('pending'),
+      this.db.countFromIndex('photos', 'by-state', 'local'),
+      this.db.countFromIndex('photos', 'by-state', 'deleted'),
+    ]);
+    return entries + local + deleted;
+  }
+
+  // ---- Photos ----
+
+  onPhotoChange(fn: (e: ChangeEvent) => void): () => void {
+    this.photoListeners.add(fn);
+    return () => this.photoListeners.delete(fn);
+  }
+
+  private emitPhotos(dates: string[], source: ChangeSource) {
+    const unique = [...new Set(dates)];
+    if (unique.length === 0) return;
+    for (const fn of this.photoListeners) fn({ dates: unique, source });
+  }
+
+  async photosFor(date: string): Promise<PhotoRecord[]> {
+    const all = await this.db.getAllFromIndex('photos', 'by-date', date);
+    return all.filter((p) => p.state !== 'deleted').sort((a, b) => a.addedAt - b.addedAt || a.path.localeCompare(b.path));
+  }
+
+  async getPhoto(path: string): Promise<PhotoRecord | undefined> {
+    return this.db.get('photos', path);
+  }
+
+  async addPhoto(photo: PhotoRecord): Promise<void> {
+    const existing = await this.db.get('photos', photo.path);
+    if (existing && existing.state !== 'deleted') return; // same image already attached
+    await this.db.put('photos', photo);
+    this.emitPhotos([photo.date], 'local');
+  }
+
+  async deletePhoto(path: string): Promise<void> {
+    const p = await this.db.get('photos', path);
+    if (!p) return;
+    if (p.state === 'local') await this.db.delete('photos', path);
+    else await this.db.put('photos', { ...p, state: 'deleted', blob: null, thumb: null });
+    this.emitPhotos([p.date], 'local');
+  }
+
+  /** Cache downloaded bytes (and a thumbnail) for a photo. */
+  async storePhotoBytes(path: string, data: Pick<PhotoRecord, 'blob' | 'thumb' | 'width' | 'height'>): Promise<void> {
+    const tx = this.db.transaction('photos', 'readwrite');
+    const p = await tx.store.get(path);
+    if (p && p.state !== 'deleted') await tx.store.put({ ...p, ...data });
+    await tx.done;
+  }
+
+  async pendingPhotos(): Promise<PhotoRecord[]> {
+    const [local, deleted] = await Promise.all([
+      this.db.getAllFromIndex('photos', 'by-state', 'local'),
+      this.db.getAllFromIndex('photos', 'by-state', 'deleted'),
+    ]);
+    return [...local, ...deleted];
+  }
+
+  /** Reconcile with the photos present in the remote tree. */
+  async applyRemotePhotos(remote: RemotePhoto[]): Promise<void> {
+    const tx = this.db.transaction('photos', 'readwrite');
+    const byPath = new Map(remote.map((r) => [r.path, r]));
+    const touched: string[] = [];
+    let cursor = await tx.store.openCursor();
+    while (cursor) {
+      const local = cursor.value;
+      const r = byPath.get(local.path);
+      if (!r) {
+        // Gone remotely: drop it unless it's a local addition still waiting to upload.
+        if (local.state !== 'local') {
+          await cursor.delete();
+          touched.push(local.date);
+        }
+      } else {
+        byPath.delete(local.path);
+        if (local.oid !== r.oid) {
+          await cursor.update({ ...local, oid: r.oid, size: r.size, state: 'synced', blob: null, thumb: null });
+          touched.push(local.date);
+        } else if (local.state === 'local') {
+          await cursor.update({ ...local, state: 'synced' });
+        }
+      }
+      cursor = await cursor.continue();
+    }
+    for (const r of byPath.values()) {
+      await tx.store.put({ ...r, state: 'synced', blob: null, thumb: null, width: null, height: null, addedAt: 0 });
+      touched.push(r.date);
+    }
+    await tx.done;
+    this.emitPhotos(touched, 'remote');
+  }
+
+  async markPhotosPushed(uploaded: string[], deleted: string[]): Promise<void> {
+    const tx = this.db.transaction('photos', 'readwrite');
+    const touched: string[] = [];
+    for (const path of uploaded) {
+      const p = await tx.store.get(path);
+      if (p?.state === 'local') {
+        await tx.store.put({ ...p, state: 'synced' });
+        touched.push(p.date);
+      }
+    }
+    for (const path of deleted) {
+      const p = await tx.store.get(path);
+      if (p?.state === 'deleted') {
+        await tx.store.delete(path);
+        touched.push(p.date);
+      }
+    }
+    await tx.done;
+    this.emitPhotos(touched, 'remote');
   }
 
   async getMeta<T>(key: string): Promise<T | undefined> {
@@ -228,6 +378,7 @@ export class JournalDb {
   async resetRemoteState(): Promise<void> {
     await this.db.delete('meta', 'remoteCommit');
     await this.db.delete('meta', 'remoteIndex');
+    await this.db.delete('meta', 'photosCommit');
   }
 
   private async write(tx: WriteTx, e: EntryRecord) {

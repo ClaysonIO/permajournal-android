@@ -1,7 +1,8 @@
 import type { JournalDb, PushedEntry, RemoteChange } from './db';
 import { ENTRY_FILE } from './dates';
 import { gitBlobSha } from './gitsha';
-import { GitHubError, type JournalRemote, type RemoteHead } from './github';
+import { GitHubError, type FileChange, type JournalRemote, type RemoteHead } from './github';
+import { ensureLfsRule, formatPointer, type LfsPort } from './lfs';
 
 export type SyncPhase = 'idle' | 'syncing' | 'offline' | 'error' | 'auth';
 
@@ -36,6 +37,7 @@ export class SyncEngine {
     private db: JournalDb,
     private remote: JournalRemote,
     private folder: string,
+    private lfs: LfsPort | null = null,
   ) {}
 
   async init(): Promise<void> {
@@ -117,6 +119,7 @@ export class SyncEngine {
         const head = await this.remote.getHead();
         if (!head) throw new Error('The branch has no commits yet.');
         await this.pull(head);
+        await this.pullPhotos(head);
         const result = await this.push(head);
         if (result !== 'conflict') break;
         if (attempt + 1 >= MAX_ATTEMPTS) throw new Error('GitHub kept changing during sync; will retry.');
@@ -181,24 +184,47 @@ export class SyncEngine {
     await this.db.setMeta('remoteCommit', head.commit);
   }
 
+  /** Photo pointers are tiny, so the whole assets tree is re-read whenever the branch moves. */
+  private async pullPhotos(head: RemoteHead) {
+    if ((await this.db.getMeta<string>('photosCommit')) === head.commit) return;
+    await this.db.applyRemotePhotos(await this.remote.listPhotos(head.commit, this.folder));
+    await this.db.setMeta('photosCommit', head.commit);
+  }
+
   private async push(head: RemoteHead): Promise<'ok' | 'conflict'> {
     const dirty = await this.db.dirtyEntries();
-    if (dirty.length === 0) return 'ok';
+    const photos = this.lfs ? await this.db.pendingPhotos() : [];
+    if (dirty.length === 0 && photos.length === 0) return 'ok';
 
-    const files = dirty.map((e) => ({
+    const files: FileChange[] = dirty.map((e) => ({
       path: `${this.folder}/${e.date}.md`,
       content: e.text === '' ? null : e.text,
     }));
-    const dates = dirty.map((e) => e.date).sort();
-    const message = dates.length <= 3 ? `sync: ${dates.join(', ')}` : `sync: ${dates.length} entries (${dates[0]} … ${dates.at(-1)})`;
 
-    const result = await this.remote.commit(head, files, message);
+    // Photos: upload the bytes to LFS first, then commit only the pointers.
+    const uploads = photos.filter((p) => p.state === 'local' && p.blob);
+    const deletes = photos.filter((p) => p.state === 'deleted');
+    if (uploads.length) {
+      await this.lfs!.upload(
+        uploads.map((p) => ({ oid: p.oid, size: p.size, bytes: async () => new Uint8Array(await p.blob!.arrayBuffer()) })),
+      );
+      for (const p of uploads) files.push({ path: p.path, content: formatPointer(p) });
+      const attrs = ensureLfsRule(await this.remote.readText(head.commit, '.gitattributes'), 'jpg');
+      if (attrs !== null) files.push({ path: '.gitattributes', content: attrs });
+    }
+    for (const p of deletes) files.push({ path: p.path, content: null });
+
+    const result = await this.remote.commit(head, files, commitMessage(dirty.map((e) => e.date), uploads.length, deletes.length));
     if (result === 'conflict') return 'conflict';
 
     const pushed: PushedEntry[] = await Promise.all(
       dirty.map(async (e) => ({ date: e.date, text: e.text, sha: e.text === '' ? null : await gitBlobSha(e.text) })),
     );
     await this.db.markPushed(pushed);
+    await this.db.markPhotosPushed(
+      uploads.map((p) => p.path),
+      deletes.map((p) => p.path),
+    );
 
     const index = { ...((await this.db.getMeta<Record<string, string>>('remoteIndex')) ?? {}) };
     for (const p of pushed) {
@@ -207,6 +233,18 @@ export class SyncEngine {
     }
     await this.db.setMeta('remoteIndex', index);
     await this.db.setMeta('remoteCommit', result.commit);
+    await this.db.setMeta('photosCommit', result.commit);
     return 'ok';
   }
+}
+
+function commitMessage(dates: string[], added: number, removed: number): string {
+  dates = [...dates].sort();
+  const parts: string[] = [];
+  if (dates.length) {
+    parts.push(dates.length <= 3 ? dates.join(', ') : `${dates.length} entries (${dates[0]} … ${dates.at(-1)})`);
+  }
+  if (added) parts.push(`${added} photo${added === 1 ? '' : 's'} added`);
+  if (removed) parts.push(`${removed} photo${removed === 1 ? '' : 's'} removed`);
+  return `sync: ${parts.join('; ')}`;
 }

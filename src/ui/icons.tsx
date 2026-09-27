@@ -51,3 +51,25 @@ export const GridIcon = () => (
     <rect x="16.5" y="16.5" width="4" height="4" rx="1" />
   </svg>
 );
+export const PhotoIcon = ({ size = 18 }: { size?: number }) => (
+  <svg {...base} width={size} height={size}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <circle cx="9" cy="10" r="1.8" />
+    <path d="m21 16-5-5-8 9" />
+  </svg>
+);
+export const PlusIcon = () => (
+  <svg {...base} width={18} height={18}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+export const CloseIcon = () => (
+  <svg {...base}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+);
+export const TrashIcon = () => (
+  <svg {...base}>
+    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+  </svg>
+);
