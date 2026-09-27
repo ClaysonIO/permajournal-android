@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { parseDateKey, toDateKey, todayKey } from '../lib/dates';
 import type { EntrySummary } from '../lib/db';
 import { ChevronLeft } from './icons';
@@ -9,11 +9,10 @@ const PITCH = 12;
 const TOP = 10;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** Every year since the first entry, each as a GitHub-style contribution grid. */
+/** Every year since the first entry, newest first, each as a GitHub-style contribution grid. */
 export function YearsScreen({ ws, onOpen, onBack }: { ws: Workspace; onOpen: (d: string) => void; onBack: () => void }) {
   const [summaries, setSummaries] = useState<Map<string, EntrySummary> | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const scroller = useRef<HTMLDivElement>(null);
   const today = todayKey();
 
   useEffect(() => {
@@ -25,7 +24,7 @@ export function YearsScreen({ ws, onOpen, onBack }: { ws: Workspace; onOpen: (d:
     const dates = [...summaries.keys()].sort();
     const first = Number((dates[0] ?? today).slice(0, 4));
     const last = Number(today.slice(0, 4));
-    const years = Array.from({ length: last - first + 1 }, (_, i) => first + i);
+    const years = Array.from({ length: last - first + 1 }, (_, i) => last - i); // newest first
     // Shade by word count, split into quartiles of the whole journal.
     const words = [...summaries.values()].map((s) => s.words).sort((a, b) => a - b);
     const q = (p: number) => words[Math.floor((words.length - 1) * p)] ?? 0;
@@ -34,12 +33,6 @@ export function YearsScreen({ ws, onOpen, onBack }: { ws: Workspace; onOpen: (d:
     for (const s of summaries.values()) levels.set(s.date, s.words <= q1 ? 1 : s.words <= q2 ? 2 : s.words <= q3 ? 3 : 4);
     return { years, levels };
   }, [summaries, today]);
-
-  // Chronological from the first entry; start scrolled to the current year.
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (el && years.length) el.scrollTop = el.scrollHeight;
-  }, [years.length]);
 
   const pick = (d: string) => {
     if (d > today) return;
@@ -58,7 +51,7 @@ export function YearsScreen({ ws, onOpen, onBack }: { ws: Workspace; onOpen: (d:
         <h2>Years</h2>
         <div className="spacer" />
       </header>
-      <div className="scroll" ref={scroller}>
+      <div className="scroll">
         {!summaries && <p className="muted pad">Loading…</p>}
         {years.map((y) => (
           <Year key={y} year={y} levels={levels} summaries={summaries!} today={today} picked={picked} onPick={pick} />

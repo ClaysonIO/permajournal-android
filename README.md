@@ -22,7 +22,7 @@ Built with Capacitor 8, React and IndexedDB. No backend server is required.
   backoff.
 - **Resolves conflicts automatically.** See [Sync](#sync).
 - **Years.** One page with a GitHub-style grid for every year since your
-  first entry, shaded by how much you wrote. Tap a day to preview it, then tap
+  first entry (newest at the top), shaded by how much you wrote. Tap a day to preview it, then tap
   again (or press Open) to go to it.
 - **History.** The History page lists every entry in the database, newest
   first and grouped by month, with totals, your streak, and full-text search.
