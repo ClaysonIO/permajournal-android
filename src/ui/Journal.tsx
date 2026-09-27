@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { addDays, formatLong, todayKey } from '../lib/dates';
+import { addDays, formatShort, todayKey } from '../lib/dates';
 import { countWords } from '../lib/db';
 import { mergeText } from '../lib/merge';
 import { MonthBar } from './MonthBar';
@@ -36,7 +36,7 @@ export function JournalScreen(props: {
           <ChevronLeft />
         </button>
         <div className="dayhead-title">
-          <div className="date">{formatLong(props.date)}</div>
+          <div className="date">{formatShort(props.date)}</div>
           {props.date !== today && (
             <button className="link small" onClick={() => props.onDate(today)}>
               Back to today

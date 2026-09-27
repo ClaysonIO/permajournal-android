@@ -41,13 +41,12 @@ export function dayKey(month: string, day: number): string {
   return `${month}-${pad(day)}`;
 }
 
-export function formatLong(key: string): string {
-  return parseDateKey(key).toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
+/** e.g. "Sat, 26 Sept 2026". */
+export function formatShort(key: string): string {
+  const d = parseDateKey(key);
+  const weekday = d.toLocaleDateString(undefined, { weekday: 'short' });
+  const month = d.toLocaleDateString(undefined, { month: 'short' });
+  return `${weekday}, ${d.getDate()} ${month} ${d.getFullYear()}`;
 }
 
 export function formatMonth(month: string): string {
