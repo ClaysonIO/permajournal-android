@@ -119,8 +119,20 @@ npm run android:sync
 npm run android:open  # build/run from Android Studio
 ```
 
-Every push runs the **Android APK** workflow, which uploads a debug APK you
-can install directly.
+Every push runs the **Android APK** workflow, which uploads an APK you can
+install directly. So that each build installs as an update to the previous
+one, sign them all with the same key. Create it once:
+
+```sh
+keytool -genkeypair -v -keystore permajournal.jks -alias permajournal \
+  -keyalg RSA -keysize 2048 -validity 36500 -storepass '<password>' -keypass '<password>' \
+  -dname "CN=Permajournal"
+base64 -w0 permajournal.jks   # macOS: base64 -i permajournal.jks
+```
+
+Then add two repository secrets: `ANDROID_KEYSTORE_BASE64` (the base64
+output) and `ANDROID_KEYSTORE_PASSWORD`. Keep `permajournal.jks` somewhere
+safe. If you lose it, the next install needs an uninstall first.
 
 ## Layout
 
