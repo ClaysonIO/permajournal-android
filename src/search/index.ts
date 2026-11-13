@@ -89,7 +89,7 @@ export interface SearchResponse {
 
 const SCAN_BATCH = 100;
 const RETRY_MS = 5_000;
-const MAX_RETRIES = 5;
+const MAX_RETRY_MS = 5 * 60_000;
 /**
  * A passage is "related" to a query when its similarity stands out from the
  * rest of the journal's (z-score) and clears the model's floor: gte-small
@@ -207,7 +207,6 @@ export class SearchIndex {
 
   /** Load the model ahead of the first query. */
   warm() {
-    void this.pump(); // also restarts indexing if it gave up after repeated failures
     void this.getEmbedder().catch(() => {});
   }
 
@@ -270,8 +269,9 @@ export class SearchIndex {
 
   /**
    * A failed read, write or embed must not leave the index half-built for the
-   * rest of the session: try again after a pause, a few times. Nothing is lost
-   * by a failure; the next attempt picks up whatever is still missing.
+   * rest of the session: keep trying, with longer and longer pauses (five
+   * minutes at most). Nothing is lost by a failure; the next attempt picks up
+   * whatever is still missing.
    */
   private async workWithRetries() {
     for (let attempt = 0; ; attempt++) {
@@ -283,8 +283,8 @@ export class SearchIndex {
         if (this.closed) return;
         this.workError = err instanceof Error ? err.message : String(err);
         this.report();
-        if (attempt >= MAX_RETRIES) return; // the next change or search page visit starts over
-        await new Promise((r) => setTimeout(r, (this.opts.retryMs ?? RETRY_MS) * 2 ** attempt));
+        const pause = Math.min((this.opts.retryMs ?? RETRY_MS) * 2 ** Math.min(attempt, 10), MAX_RETRY_MS);
+        await new Promise((r) => setTimeout(r, pause));
         if (this.closed) return;
       }
     }

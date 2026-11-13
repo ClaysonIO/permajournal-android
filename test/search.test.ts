@@ -153,8 +153,8 @@ describe('SearchIndex', () => {
     for (const [date, text] of Object.entries(entries)) await db.saveLocal(date, text);
     const real = journalSource(name);
     const { embedder } = fakeEmbedder();
-    let readFailures = 1;
-    let embedFailures = 1;
+    let readFailures = 4;
+    let embedFailures = 4;
     const statuses: SearchStatus[] = [];
     const index = await SearchIndex.open({
       name,
