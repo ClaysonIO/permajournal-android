@@ -4,7 +4,7 @@ import { countWords } from '../lib/db';
 import { mergeText } from '../lib/merge';
 import { MonthBar } from './MonthBar';
 import { SyncBadge } from './SyncBadge';
-import { ChevronLeft, ChevronRight, GearIcon, GridIcon, HistoryIcon, PhotoIcon } from './icons';
+import { ChevronLeft, ChevronRight, GearIcon, GridIcon, HistoryIcon, PhotoIcon, SearchIcon } from './icons';
 import { useDayPhotos } from './Photos';
 import { useWrittenDates, type Workspace } from './workspace';
 
@@ -14,6 +14,7 @@ export function JournalScreen(props: {
   ws: Workspace;
   date: string;
   onDate: (d: string) => void;
+  onSearch: () => void;
   onHistory: () => void;
   onYears: () => void;
   onSettings: () => void;
@@ -58,6 +59,9 @@ export function JournalScreen(props: {
       <footer className="toolbar safe-bottom">
         <SyncBadge sync={props.ws.sync} onClick={props.onSettings} />
         <div className="spacer" />
+        <button className="icon-btn" aria-label="Search" onClick={props.onSearch}>
+          <SearchIcon size={22} />
+        </button>
         <button className="icon-btn" aria-label="Years" onClick={props.onYears}>
           <GridIcon />
         </button>

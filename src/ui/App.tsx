@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { loadRepo, loadSession, saveRepo, saveSession, type SelectedRepo, type Session } from '../lib/auth';
 import { JournalDb } from '../lib/db';
@@ -12,8 +12,12 @@ import { YearsScreen } from './Years';
 import { PhotosScreen } from './Photos';
 import { handleBack } from './back';
 import { useWorkspace } from './workspace';
+import { destroySearchData } from '../search/client';
 
-type Screen = 'journal' | 'history' | 'years' | 'settings' | 'photos';
+// Search is its own chunk, so it adds nothing to what loads at startup.
+const SearchScreen = lazy(() => import('./Search'));
+
+type Screen = 'journal' | 'history' | 'years' | 'settings' | 'photos' | 'search';
 
 /** Back after this long in the background and we reopen on today. */
 const RESET_TO_TODAY_AFTER_MS = 30 * 60_000;
@@ -31,6 +35,8 @@ export function App() {
     await saveSession(session);
     if (!session) await saveRepo(null);
     setBoot({ session, repo: session ? boot.repo : null });
+    // Signing out always removes the search index, even when unsynced entries are kept.
+    if (!session) await destroySearchData();
   };
   const setRepo = async (repo: SelectedRepo | null) => {
     await saveRepo(repo);
@@ -58,6 +64,7 @@ function Main(props: { session: Session; repo: SelectedRepo; onSwitchRepo: () =>
   const [screen, setScreen] = useState<Screen>('journal');
   // Always open on today.
   const [date, setDate] = useState(todayKey);
+  const [query, setQuery] = useState('');
   const hiddenAt = useRef<{ at: number; day: string } | null>(null);
 
   // Coming back to the app: jump to today if the day changed or we were away a while.
@@ -97,6 +104,12 @@ function Main(props: { session: Session; repo: SelectedRepo; onSwitchRepo: () =>
   switch (screen) {
     case 'history':
       return <HistoryScreen ws={ws} onOpen={openDate} onBack={() => setScreen('journal')} />;
+    case 'search':
+      return (
+        <Suspense fallback={<div className="app" />}>
+          <SearchScreen ws={ws} query={query} onQuery={setQuery} onOpen={openDate} onBack={() => setScreen('journal')} />
+        </Suspense>
+      );
     case 'photos':
       return <PhotosScreen ws={ws} date={date} onBack={() => setScreen('journal')} />;
     case 'years':
@@ -117,6 +130,7 @@ function Main(props: { session: Session; repo: SelectedRepo; onSwitchRepo: () =>
           ws={ws}
           date={date}
           onDate={setDate}
+          onSearch={() => setScreen('search')}
           onHistory={() => setScreen('history')}
           onYears={() => setScreen('years')}
           onPhotos={() => setScreen('photos')}

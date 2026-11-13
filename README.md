@@ -28,8 +28,11 @@ Built with Capacitor 8, React and IndexedDB. No backend server is required.
   in a masonry grid. Tap one to see it full-screen: pinch or double-tap to
   zoom, drag to pan, swipe to move between photos. Photos are added from the
   device's picker.
+- **Search.** The search button opens a page that finds entries by meaning
+  as well as by exact words ("a walk by the sea" finds the day you wrote
+  about the shore). It runs entirely on the phone. See [Search](#search).
 - **History.** The History page lists every entry in the database, newest
-  first and grouped by month, with totals, your streak, and full-text search.
+  first and grouped by month, with totals, your streak, and a quick text filter.
 
 ## Sign-in
 
@@ -102,6 +105,33 @@ photo removes the pointer, but the LFS object stays in storage until it's
 purged on GitHub. Git history keeps
 the old version.
 
+## Search
+
+Search is semantic (vector) search plus keyword matching, and nothing leaves
+the device:
+
+- **Model.** [gte-small](https://huggingface.co/thenlper/gte-small) (MIT,
+  8-bit quantized, 34 MB, English) runs on ONNX Runtime's WebAssembly
+  backend. Both ship inside the APK, which grows by about 50 MB.
+  `scripts/search-assets.mjs` downloads the model at build time, pinned to a
+  revision and checked against a SHA-256; it is not committed.
+- **Index.** Each entry is split into paragraph-sized passages, and each
+  passage gets a 384-dimension vector stored as int8. The index lives in its
+  own IndexedDB database (`permajournal-search:<repo>`), separate from the
+  journal, and can always be rebuilt from it.
+- **In the background.** All of it runs in a Web Worker that starts three
+  seconds after the journal is on screen. The worker reads entries from
+  IndexedDB itself, so the UI thread does no work for indexing, and the model
+  is only loaded when there is something to embed or a search to answer. The
+  first index of a large journal takes a few minutes; after that only
+  passages whose text changed are re-embedded, a few seconds after you stop
+  typing. Keyword matches work while vectors are still being built, and a
+  search always goes ahead of indexing.
+- **Ranking.** A passage is a result if it contains every query word, or if
+  its similarity to the query stands out from the rest of the journal.
+- **Signing out** deletes the search index for every repository, including
+  when unsynced entries are kept on the device.
+
 ## Logo
 
 The logo is a grid of days whose filled cells spell a "P". It's defined in
@@ -113,7 +143,7 @@ screens and `public/logo.svg`.
 
 ```sh
 npm install
-npm test            # merge, sync, photo/LFS tests (in-memory GitHub + LFS, fake IndexedDB)
+npm test            # merge, sync, photo/LFS, search tests (in-memory GitHub + LFS, fake IndexedDB)
 npm run dev         # browser preview; device-flow calls go through the Vite proxy
 npm run android:sync
 npm run android:open  # build/run from Android Studio
@@ -145,5 +175,6 @@ src/lib/auth.ts     Device-flow sign-in, stored session and repository
 src/lib/lfs.ts      Git LFS batch API client, pointer files, .gitattributes rule
 src/lib/photos.ts   Adding photos, on-demand LFS download and caching
 src/lib/http.ts     Native (CORS-free) HTTP for github.com and LFS storage
-src/ui/             Journal (month bar + editor), Photos (masonry + zoom viewer), Years, History, Settings, sign-in, repo picker
+src/search/         On-device search: chunking, tokenizer, model, index, worker and its UI-side client
+src/ui/             Search, Journal (month bar + editor), Photos (masonry + zoom viewer), Years, History, Settings, sign-in, repo picker
 ```

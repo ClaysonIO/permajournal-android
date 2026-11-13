@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // The search worker loads its model runtime on demand, which needs ES-module chunks.
+  worker: { format: 'es' },
   build: {
     target: 'es2022',
     sourcemap: false,
