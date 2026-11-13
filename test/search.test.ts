@@ -147,6 +147,40 @@ describe('SearchIndex', () => {
     expect((await index.search('deadline')).hits.map((h) => h.date)).toEqual(['2026-08-02']);
   });
 
+  it('recovers when reading the journal or embedding fails', async () => {
+    const name = `search-${n++}`;
+    const db = await JournalDb.open(name);
+    for (const [date, text] of Object.entries(entries)) await db.saveLocal(date, text);
+    const real = journalSource(name);
+    const { embedder } = fakeEmbedder();
+    let readFailures = 1;
+    let embedFailures = 1;
+    const statuses: SearchStatus[] = [];
+    const index = await SearchIndex.open({
+      name,
+      modelId: 'fake',
+      retryMs: 1,
+      source: {
+        get: (d) => real.get(d),
+        batch: async (after, limit) => {
+          if (readFailures-- > 0) throw new Error('read failed');
+          return real.batch(after, limit);
+        },
+      },
+      loadEmbedder: async () => ({
+        embed: async (t) => {
+          if (embedFailures-- > 0) throw new Error('embed failed');
+          return embedder.embed(t);
+        },
+      }),
+      onStatus: (s) => statuses.push(s),
+    });
+    await index.start();
+    expect(statuses.map((s) => s.error)).toEqual(expect.arrayContaining(['read failed', 'embed failed']));
+    expect(index.status).toMatchObject({ phase: 'ready', entries: 3, embedded: 3 });
+    expect(index.status.error).toBeUndefined();
+  });
+
   it('re-embeds only the passages that changed', async () => {
     const para = (topic: string) => `${`All about the ${topic} today. `.repeat(10)}`.trim();
     const { db, index, calls } = await setup({ '2026-08-01': `${para('beach')}\n\n${para('office')}` });

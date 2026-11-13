@@ -88,6 +88,8 @@ export interface SearchResponse {
 }
 
 const SCAN_BATCH = 100;
+const RETRY_MS = 5_000;
+const MAX_RETRIES = 5;
 /**
  * A passage is "related" to a query when its similarity stands out from the
  * rest of the journal's (z-score) and clears the model's floor: gte-small
@@ -135,6 +137,8 @@ export interface SearchIndexOptions {
   /** Called the first time a vector is needed. */
   loadEmbedder: () => Promise<Embedder>;
   onStatus?: (s: SearchStatus) => void;
+  /** First pause before retrying failed indexing; doubles each time. */
+  retryMs?: number;
 }
 
 export class SearchIndex {
@@ -146,7 +150,10 @@ export class SearchIndex {
   private gate = new Gate();
   private embedder: Promise<Embedder> | null = null;
   private model: ModelState = 'idle';
+  /** Why the model could not be loaded. */
   private error: string | undefined;
+  /** Why the last indexing attempt failed; cleared when one succeeds. */
+  private workError: string | undefined;
   private queryVectors = new Map<string, Float32Array>();
   private lastStatus = '';
 
@@ -195,11 +202,12 @@ export class SearchIndex {
   /** Entries that changed in the journal. */
   noteChanged(dates: string[]) {
     for (const d of dates) this.dirty.add(d);
-    if (this.scanned) void this.pump();
+    void this.pump();
   }
 
   /** Load the model ahead of the first query. */
   warm() {
+    void this.pump(); // also restarts indexing if it gave up after repeated failures
     void this.getEmbedder().catch(() => {});
   }
 
@@ -217,7 +225,7 @@ export class SearchIndex {
       entries: this.docs.size,
       embedded,
       model: this.model,
-      ...(this.error ? { error: this.error } : {}),
+      ...(this.workError || this.error ? { error: this.workError ?? this.error } : {}),
     };
   }
 
@@ -253,16 +261,33 @@ export class SearchIndex {
   // ---- Indexing ----
 
   private pump(): Promise<void> {
-    this.pumping ??= this.work()
-      .catch((err) => {
-        if (this.closed) return;
-        this.error = err instanceof Error ? err.message : String(err);
-      })
-      .finally(() => {
-        this.pumping = null;
-        if (!this.closed) this.report();
-      });
+    this.pumping ??= this.workWithRetries().finally(() => {
+      this.pumping = null;
+      if (!this.closed) this.report();
+    });
     return this.pumping;
+  }
+
+  /**
+   * A failed read, write or embed must not leave the index half-built for the
+   * rest of the session: try again after a pause, a few times. Nothing is lost
+   * by a failure; the next attempt picks up whatever is still missing.
+   */
+  private async workWithRetries() {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.work();
+        this.workError = undefined;
+        return;
+      } catch (err) {
+        if (this.closed) return;
+        this.workError = err instanceof Error ? err.message : String(err);
+        this.report();
+        if (attempt >= MAX_RETRIES) return; // the next change or search page visit starts over
+        await new Promise((r) => setTimeout(r, (this.opts.retryMs ?? RETRY_MS) * 2 ** attempt));
+        if (this.closed) return;
+      }
+    }
   }
 
   private async work() {
@@ -274,9 +299,10 @@ export class SearchIndex {
     for (;;) {
       if (this.closed) return;
       if (this.dirty.size) {
-        const dates = [...this.dirty];
-        this.dirty.clear();
-        for (const date of dates) await this.refresh(date, await this.opts.source.get(date));
+        for (const date of [...this.dirty]) {
+          await this.refresh(date, await this.opts.source.get(date));
+          this.dirty.delete(date);
+        }
         this.report();
         continue;
       }

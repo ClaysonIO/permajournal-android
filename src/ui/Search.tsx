@@ -100,8 +100,9 @@ export default function SearchScreen(props: {
 }
 
 function describe(s: SearchStatus): string {
-  if (s.phase === 'scanning') return 'Preparing search…';
   if (s.model === 'unavailable') return 'Searching by words only: the search model could not be loaded.';
+  if (s.error && s.phase !== 'ready') return `The search index hit a problem and will try again: ${s.error}`;
+  if (s.phase === 'scanning') return 'Preparing search…';
   if (s.phase === 'indexing' && s.embedded < s.entries) {
     return `Indexing in the background: ${s.embedded.toLocaleString()} of ${s.entries.toLocaleString()} entries. Word matches already work.`;
   }
