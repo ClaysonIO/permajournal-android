@@ -685,3 +685,36 @@ input:focus {
 .icon-btn.light:active {
   background: rgba(255, 255, 255, 0.15);
 }
+
+/* Search page */
+.search-page-input {
+  margin-top: 12px;
+}
+.search-status {
+  margin: 8px 16px 6px;
+  min-height: 1.4em;
+}
+.row.search-hit {
+  padding: 12px 16px;
+  color: inherit;
+  font: inherit;
+}
+.search-hit-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+.search-snippet {
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.search-snippet mark {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 0 1px;
+}

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Permajournal for Android: a fast, offline-first daily journal that backs up to your own GitHub repository as plain Markdown." />
+    <link rel="icon" type="image/svg+xml" href="logo.svg" />
+    <title>Permajournal for Android</title>
+    <style>
+      :root {
+        --bg: #f7f4ee;
+        --surface: #fffdf9;
+        --text: #22201c;
+        --muted: #6f695e;
+        --line: #e6e0d4;
+        --accent: #4f6bd8;
+        --accent-text: #ffffff;
+        --accent-soft: #dfe5fa;
+        --shadow: 0 18px 40px -18px rgba(60, 50, 30, 0.35);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #16161a;
+          --surface: #1d1d22;
+          --text: #e9e6df;
+          --muted: #9a968e;
+          --line: #2c2c33;
+          --accent: #8b9cf5;
+          --accent-text: #14141a;
+          --accent-soft: #2a3150;
+          --shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.8);
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 17px/1.6 system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+      a {
+        color: var(--accent);
+      }
+      .wrap {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+      header.top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 20px 0;
+      }
+      header.top img {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+      }
+      header.top strong {
+        font-size: 18px;
+        flex: 1;
+      }
+      header.top a {
+        text-decoration: none;
+        font-size: 15px;
+        margin-left: 14px;
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        gap: 48px;
+        align-items: center;
+        padding: 36px 0 56px;
+      }
+      h1 {
+        font-size: clamp(34px, 6vw, 54px);
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+        margin: 0 0 18px;
+        text-wrap: balance;
+      }
+      .lede {
+        font-size: 20px;
+        color: var(--muted);
+        margin: 0 0 28px;
+        max-width: 34em;
+      }
+      .cta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      .btn {
+        display: inline-flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 56px;
+        padding: 8px 22px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-text);
+      }
+      .btn small {
+        font-weight: 400;
+        font-size: 13px;
+        opacity: 0.85;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 14px 0 0;
+      }
+      .phone {
+        justify-self: center;
+        width: min(300px, 78vw);
+        border-radius: 34px;
+        border: 9px solid #1c1c20;
+        background: #1c1c20;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      .phone img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 25px;
+      }
+      section {
+        padding: 44px 0;
+        border-top: 1px solid var(--line);
+      }
+      h2 {
+        font-size: 26px;
+        letter-spacing: -0.01em;
+        margin: 0 0 24px;
+      }
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .features li {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 18px 20px;
+      }
+      .features h3 {
+        margin: 0 0 6px;
+        font-size: 17px;
+      }
+      .features p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15.5px;
+      }
+      .shots {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 28px;
+      }
+      .shots figure {
+        margin: 0;
+        text-align: center;
+      }
+      .shots .phone {
+        margin: 0 auto;
+      }
+      figcaption {
+        color: var(--muted);
+        font-size: 15px;
+        margin-top: 14px;
+      }
+      ol.steps {
+        margin: 0;
+        padding-left: 22px;
+        max-width: 44em;
+      }
+      ol.steps li {
+        margin-bottom: 8px;
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 28px 0 44px;
+        color: var(--muted);
+        font-size: 14.5px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 20px;
+      }
+      @media (max-width: 760px) {
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 36px;
+          padding-top: 16px;
+        }
+        .shots {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <img src="logo.svg" alt="" />
+        <strong>Permajournal</strong>
+        <a href="https://github.com/__REPO__/releases">Releases</a>
+        <a href="https://github.com/__REPO__">GitHub</a>
+      </header>
+
+      <main>
+        <div class="hero">
+          <div>
+            <h1>A daily journal that opens on today and lives in your own GitHub repo.</h1>
+            <p class="lede">
+              Permajournal for Android is fast and works offline. Every day is one plain Markdown file, backed up to a
+              repository you own. There is no server and no account other than GitHub.
+            </p>
+            <div class="cta">
+              <!-- LATEST -->
+              <a class="btn" href="https://github.com/__REPO__">View the source</a>
+            </div>
+            <p class="note"><!-- LATEST_NOTE --></p>
+          </div>
+          <div class="phone"><img src="journal.png" width="1082" height="2202" alt="The journal screen: a bar of the month's days above today's entry." /></div>
+        </div>
+
+        <section>
+          <h2>What it does</h2>
+          <ul class="features">
+            <li>
+              <h3>Opens on today</h3>
+              <p>Every start lands on the current day, ready to type. A bar across the top shows which days of the month you wrote.</p>
+            </li>
+            <li>
+              <h3>Offline first</h3>
+              <p>Each keystroke is saved on the phone within a fraction of a second, with or without a connection.</p>
+            </li>
+            <li>
+              <h3>Backed up to GitHub</h3>
+              <p>Entries sync to <code>entries/YYYY-MM-DD.md</code> in your repository a few seconds after you stop typing.</p>
+            </li>
+            <li>
+              <h3>Never loses text</h3>
+              <p>Edits made on two devices are merged line by line, then word by word. When they truly overlap, both are kept.</p>
+            </li>
+            <li>
+              <h3>Search by meaning</h3>
+              <p>Find “a walk by the sea” even if you wrote “the shore”. The search model runs on the phone; nothing is sent anywhere.</p>
+            </li>
+            <li>
+              <h3>Years at a glance</h3>
+              <p>One grid per year since your first entry, shaded by how much you wrote. Tap a day to open it.</p>
+            </li>
+            <li>
+              <h3>Photos</h3>
+              <p>Attach photos to a day. They are stored in the same repository with Git LFS and cached on the phone.</p>
+            </li>
+            <li>
+              <h3>Plain files, yours to keep</h3>
+              <p>No proprietary format and no lock-in: the journal is Markdown in a Git repository, readable anywhere.</p>
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>A closer look</h2>
+          <div class="shots">
+            <figure>
+              <div class="phone"><img src="search.png" width="1082" height="2202" loading="lazy" alt="Search results for 'a walk by the sea' listing days about the shore, a beach walk and a cove." /></div>
+              <figcaption>Search finds days by what they were about.</figcaption>
+            </figure>
+            <figure>
+              <div class="phone"><img src="years.png" width="1082" height="2202" loading="lazy" alt="The Years screen: a grid of days for each year, shaded by word count." /></div>
+              <figcaption>Every year of writing on one page.</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section>
+          <h2>Install</h2>
+          <ol class="steps">
+            <li>Download the latest APK from the <a href="https://github.com/__REPO__/releases/latest">releases page</a> on your Android phone.</li>
+            <li>Open the file and allow your browser to install apps if Android asks.</li>
+            <li>Sign in with GitHub and pick the repository to keep your journal in.</li>
+          </ol>
+          <p class="note">Each release is signed with the same key, so a new version installs over the previous one and keeps your data.</p>
+        </section>
+      </main>
+
+      <footer>
+        <span>Permajournal for Android</span>
+        <a href="https://github.com/__REPO__">Source</a>
+        <a href="https://github.com/__REPO__/releases">All releases</a>
+        <a href="https://github.com/__REPO__/issues">Report a problem</a>
+      </footer>
+    </div>
+  </body>
+</html>

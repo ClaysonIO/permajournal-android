@@ -1,14 +1,25 @@
 name: Android APK
 
+# Pull requests get a test build. Every push to main (in practice, every
+# merged pull request) also publishes a GitHub release with the APK and
+# redeploys the project page.
 on:
   push:
-    branches: [main, 'claude/**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+# A newer push to a pull request replaces its running build. Runs on main are
+# never cancelled or held back, so every merge gets its release.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
     steps:
       - uses: actions/checkout@v4
 
@@ -53,3 +64,61 @@ jobs:
         with:
           name: permajournal-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      # The version is 1.0.<run number>, the same number the APK carries as
+      # its versionCode, so each release installs over the one before.
+      - name: Publish release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: 1.0.${{ github.run_number }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk "Permajournal-$VERSION.apk"
+          # A re-run keeps its run number: replace the APK instead of failing on the existing tag.
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            gh release upload "v$VERSION" "Permajournal-$VERSION.apk" --clobber
+          else
+            gh release create "v$VERSION" "Permajournal-$VERSION.apk" \
+              --target "$GITHUB_SHA" --title "Permajournal $VERSION" --generate-notes
+          fi
+          # Two merges can finish building out of order or at the same moment. After
+          # publishing, point "latest" at the highest version; whichever run does this
+          # last has seen every release, so it settles on the right one.
+          NEWEST="$(gh release list --limit 100 --json tagName --jq '[.[].tagName | select(test("^v1\\.0\\.[0-9]+$")) | ltrimstr("v1.0.") | tonumber] | max')"
+          gh release edit "v1.0.$NEWEST" --latest
+
+  # The project page (site/) on GitHub Pages, showing the release just published.
+  # Needs Pages enabled once: Settings → Pages → Source: GitHub Actions.
+  site:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # One deploy at a time. If several wait, only the newest runs, and it reads
+    # whichever release is latest by then, so the page never goes backwards.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          RELEASE="$(gh release view --json tagName,publishedAt,url,assets || true)" node scripts/build-site.mjs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

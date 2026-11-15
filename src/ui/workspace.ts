@@ -7,6 +7,8 @@ import { http } from '../lib/http';
 import { LfsClient } from '../lib/lfs';
 import { PhotoService } from '../lib/photos';
 import { SyncEngine, type SyncState } from '../lib/sync';
+import { SearchService } from '../search/client';
+import type { SearchStatus } from '../search/index';
 import type { SelectedRepo, Session } from '../lib/auth';
 
 export interface Workspace {
@@ -14,11 +16,14 @@ export interface Workspace {
   sync: SyncEngine;
   client: GitHubClient;
   photos: PhotoService;
+  search: SearchService;
   repo: SelectedRepo;
 }
 
 const POLL_MS = 60_000;
 const PUSH_DEBOUNCE_MS = 2_500;
+/** The search index catches up in a background worker, well after the journal is on screen. */
+const SEARCH_START_MS = 3_000;
 
 /** Open the local database for a repo and keep it synced for as long as it's mounted. */
 export function useWorkspace(session: Session, repo: SelectedRepo): Workspace | null {
@@ -41,8 +46,15 @@ export function useWorkspace(session: Session, repo: SelectedRepo): Workspace | 
         db.close();
         return;
       }
-      workspace = { db, sync, client, photos, repo };
+      const search = new SearchService(repo.fullName);
+      workspace = { db, sync, client, photos, search, repo };
       setWs(workspace);
+
+      const searchStart = setTimeout(() => search.start(), SEARCH_START_MS);
+      cleanups.push(
+        () => clearTimeout(searchStart),
+        db.onChange((e) => search.noteChanged(e.dates)),
+      );
 
       const onLocal = (e: { source: string }) => {
         if (e.source !== 'local') return;
@@ -72,6 +84,7 @@ export function useWorkspace(session: Session, repo: SelectedRepo): Workspace | 
       cleanups.forEach((c) => c());
       workspace?.sync.stop();
       workspace?.photos.dispose();
+      workspace?.search.dispose();
       workspace?.db.close();
       setWs(null);
     };
@@ -84,6 +97,13 @@ export function useSyncState(sync: SyncEngine): SyncState {
   return useSyncExternalStore(
     (cb) => sync.subscribe(cb),
     () => sync.state,
+  );
+}
+
+export function useSearchStatus(search: SearchService): SearchStatus {
+  return useSyncExternalStore(
+    (cb) => search.subscribe(cb),
+    () => search.status,
   );
 }
 

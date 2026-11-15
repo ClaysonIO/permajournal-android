@@ -3,3 +3,5 @@ dist
 *.tsbuildinfo
 .env.local
 .DS_Store
+public/models
+_site
