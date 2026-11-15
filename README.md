@@ -155,7 +155,7 @@ APK as a build artifact.
 ## Releases and project page
 
 The default branch is `main`. Every push to it (in practice, every merged
-pull request) builds the APK and publishes it as a
+pull request), and every manual run of the workflow on it, builds the APK and publishes it as a
 [GitHub release](../../releases) named `v1.0.<run number>`, with notes
 generated from the merged pull requests. The same number is the APK's
 `versionCode`, so each release installs over the previous one.
