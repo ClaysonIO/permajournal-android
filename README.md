@@ -149,9 +149,30 @@ npm run android:sync
 npm run android:open  # build/run from Android Studio
 ```
 
-Every push runs the **Android APK** workflow, which uploads an APK you can
-install directly. So that each build installs as an update to the previous
-one, sign them all with the same key. Create it once:
+Every pull request runs the **Android APK** workflow, which uploads a test
+APK as a build artifact.
+
+## Releases and project page
+
+The default branch is `main`. Every push to it (in practice, every merged
+pull request) builds the APK and publishes it as a
+[GitHub release](../../releases) named `v1.0.<run number>`, with notes
+generated from the merged pull requests. The same number is the APK's
+`versionCode`, so each release installs over the previous one.
+
+The same workflow then deploys the project page in `site/` to GitHub Pages,
+with the latest release's version, date and download link filled in by
+`scripts/build-site.mjs`. Pages has to be enabled once: **Settings → Pages →
+Source: GitHub Actions**. While the repository is private, visitors who are
+not signed in with access cannot open its releases.
+
+To preview the page locally: `node scripts/build-site.mjs` and open
+`_site/index.html`.
+
+## Signing key
+
+So that each build installs as an update to the previous one, sign them all
+with the same key. Create it once:
 
 ```sh
 keytool -genkeypair -v -keystore permajournal.jks -alias permajournal \
@@ -176,5 +197,6 @@ src/lib/lfs.ts      Git LFS batch API client, pointer files, .gitattributes rule
 src/lib/photos.ts   Adding photos, on-demand LFS download and caching
 src/lib/http.ts     Native (CORS-free) HTTP for github.com and LFS storage
 src/search/         On-device search: chunking, tokenizer, model, index, worker and its UI-side client
+site/               Project page for GitHub Pages (built by scripts/build-site.mjs)
 src/ui/             Search, Journal (month bar + editor), Photos (masonry + zoom viewer), Years, History, Settings, sign-in, repo picker
 ```
